@@ -1,0 +1,2 @@
+test:
+  target_url: ""  # e.g. "https://example.com" - the base URL to run sitemap discovery against

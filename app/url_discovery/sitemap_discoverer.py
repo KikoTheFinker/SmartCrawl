@@ -5,25 +5,30 @@ import requests
 from bs4 import BeautifulSoup
 from requests import RequestException
 
-from app.config.loaders.sitemap_config_model import AppConfig
+from app.config.loaders.url_discovery_config_loader import get_sitemap_config
 from app.exceptions import SitemapDiscoveryError
 from app.logging.logger import setup_logger
 from app.url_discovery.utils.compression_utils import maybe_decompress
+from app.url_discovery.utils.url_utils import normalize_base_url
 
 
 class SitemapDiscoverer:
     SITEMAP_PATTERN = re.compile(r"(?i)^sitemap:\s*(.+)$")
 
-    def __init__(self, base_url: str, config: AppConfig):
-        self.base_url = base_url.rstrip("/")
-        self.config = config.sitemap
+    def __init__(self, base_url: str):
+        self.base_url = normalize_base_url(base_url)
+        self.config = get_sitemap_config()
         self.logger = setup_logger(__name__)
 
     def discover_urls(self) -> list[str]:
         self.logger.info(f"Discovering sitemap URLs for: {self.base_url}")
-        sitemap_urls = self._try_fetch_sitemap_urls()
-        all_urls = set()
+        try:
+            sitemap_urls = self._try_fetch_sitemap_urls()
+        except Exception as e:
+            self.logger.warning(f"Sitemap discovery failed: {e}")
+            sitemap_urls = []
 
+        all_urls = set()
         for sitemap_url in sitemap_urls:
             all_urls.update(self._parse_sitemap(sitemap_url))
 

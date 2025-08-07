@@ -1,2 +1,8 @@
 requests==2.32.4
 beautifulsoup4==4.13.4
+pydantic==2.11.7
+python-dotenv==1.1.1
+playwright==1.44.0
+PyYAML==6.0.2
+brotlipy==0.7.0
+lxml==6.0.0
