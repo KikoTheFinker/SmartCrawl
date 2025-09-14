@@ -1,8 +1,10 @@
 from pathlib import Path
 from typing import Dict, Any
+
 import yaml
 
 _yaml_cache: Dict[str, Dict[str, Any]] = {}
+
 
 def load_yaml(path: Path) -> Dict[str, Any]:
     resolved_path = str(path.resolve())
@@ -16,7 +18,6 @@ def load_yaml(path: Path) -> Dict[str, Any]:
         with open(path, "r", encoding="utf-8") as f:
             data = yaml.safe_load(f) or {}
 
-        # Handle includes
         includes = data.pop("include", [])
         if includes:
             for include_file in includes:

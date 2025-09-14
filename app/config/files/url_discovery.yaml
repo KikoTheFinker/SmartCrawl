@@ -3,6 +3,10 @@ url_discovery:
   sitemap:
     timeout: 10
     retry: 3
+    concurrency: 20
+    max_urls_per_sitemap: 50000
+    max_total_urls: 1000000
+    worker_timeout: 30.0
     common_paths:
       - "/sitemap.xml"
       - "/sitemaps.xml"
@@ -10,15 +14,117 @@ url_discovery:
       - "/sitemap/sitemap.xml"
       - "/sitemap-index.xml"
     headers:
-      User-Agent: "Mozilla/5.0"
-      Accept: "application/xml,text/xml;q=0.9,*/*;q=0.8"
+      User-Agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+      Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7"
       Accept-Language: "en-US,en;q=0.9"
       Accept-Encoding: "gzip, deflate, br"
       Connection: "keep-alive"
       Upgrade-Insecure-Requests: "1"
+      Sec-Fetch-Dest: "document"
+      Sec-Fetch-Mode: "navigate"
+      Sec-Fetch-Site: "none"
+      Sec-Fetch-User: "?1"
+      Cache-Control: "max-age=0"
 
   crawler:
-    max_pages: 200
+    include_subdomains: true
+    include_assets: false
+    html_only: true
+    max_pages: 4000
     concurrency: 30
-    timeout: 10000
-    load_state: "networkidle"
+    obey_robots: true
+    verbose: true
+
+  postprocess:
+    collapse_language_variants: true
+    default_languages:
+      - en
+
+  parsing:
+    html_content_types:
+      - text/html
+      - application/xhtml+xml
+    sitemap_content_types:
+      - application/xml
+      - text/xml
+      - application/rss+xml
+      - application/atom+xml
+    url_in_text_pattern: "(?P<u>\\bhttps?://[^\\s\"'<>\\)]+)"
+    asset_extensions:
+      - png
+      - jpg
+      - jpeg
+      - webp
+      - svg
+      - gif
+      - ico
+      - bmp
+      - tiff
+      - avif
+      - css
+      - js
+      - mjs
+      - map
+      - woff
+      - woff2
+      - ttf
+      - otf
+      - eot
+      - mp4
+      - webm
+      - mov
+      - mkv
+      - mp3
+      - wav
+      - ogg
+      - pdf
+      - doc
+      - docx
+      - ppt
+      - pptx
+      - xls
+      - xlsx
+      - csv
+      - tsv
+      - txt
+      - md
+      - yaml
+      - yml
+    non_html_api_patterns:
+      - "/wp-json/"
+      - "/wp-admin/admin-ajax.php"
+      - "/graphql"
+      - "/api/"
+      - "/rest/"
+      - "/feed"
+      - "/rss"
+      - ".json"
+      - ".xml"
+      - ".rss"
+      - ".atom"
+    tracking_params:
+      - utm_source
+      - utm_medium
+      - utm_campaign
+      - utm_term
+      - utm_content
+      - utm_id
+      - gclid
+      - fbclid
+      - msclkid
+      - mc_cid
+      - mc_eid
+      - igshid
+      - ref
+      - ref_src
+      - ref_url
+      - yclid
+    language_segment_pattern: "^/([a-z]{2})(?:/|$)"
+    pagination_hints:
+      - page
+      - p
+      - offset
+    max_url_length: 2048
+    prefer_https: true
+    strip_www: true
+    max_pagination_page: 200

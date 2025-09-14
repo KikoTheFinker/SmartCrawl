@@ -1,8 +1,10 @@
 import os
-from dotenv import load_dotenv
 from pathlib import Path
 
+from dotenv import load_dotenv
+
 load_dotenv()
+
 
 class EnvSettings:
     @staticmethod
@@ -11,8 +13,7 @@ class EnvSettings:
         if not config_path:
             raise EnvironmentError("CONFIG_PATH not set in .env")
 
-        return Path(__file__).resolve().parents[3] / config_path # root
-
+        return Path(__file__).resolve().parents[3] / config_path  # root
 
 
 env_settings = EnvSettings()
