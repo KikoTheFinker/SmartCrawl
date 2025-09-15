@@ -1,5 +1,5 @@
+import argparse
 import asyncio
-import sys
 
 from app.config.loaders.env_loader import env_settings
 from app.config.loaders.helpers.yaml_loading_helper import load_yaml
@@ -9,10 +9,23 @@ from app.url_discovery.orchestrator import UrlDiscoveryOrchestrator
 
 
 def main():
+    parser = argparse.ArgumentParser(description="SmartCrawl URL discovery")
+    parser.add_argument(
+        "start_url",
+        nargs="?",
+        help="Start URL (overrides config if provided)",
+    )
+    parser.add_argument(
+        "--no-sitemap",
+        action="store_true",
+        help="Skip sitemap discovery and use HTTP crawler only",
+    )
+    args = parser.parse_args()
+
     logger = setup_logger(__name__)
-    start_url = None
-    if len(sys.argv) >= 2:
-        start_url = sys.argv[1]
+
+    if args.start_url:
+        start_url = args.start_url
         logger.info(f"Using start_url from CLI: {start_url}")
     else:
         data = load_yaml(env_settings.get_config_path())
@@ -21,7 +34,7 @@ def main():
         logger.info(f"Using start_url from config: {start_url}")
 
     async def run():
-        orchestrator = UrlDiscoveryOrchestrator(start_url)
+        orchestrator = UrlDiscoveryOrchestrator(start_url, use_sitemap=not args.no_sitemap)
         logger.info("Starting URL discovery...")
         urls = await orchestrator.discover()
         for u in urls:

@@ -10,28 +10,27 @@ from app.url_discovery.utils.url_utils import normalize_base_url
 
 
 class UrlDiscoveryOrchestrator:
-    def __init__(self, base_url: str):
+    def __init__(self, base_url: str, use_sitemap: bool = True):
         self.base_url = normalize_base_url(base_url)
         self.logger = setup_logger(__name__)
         self.post_cfg = get_postprocess_config()
         self.patterns = load_patterns()
+        self.use_sitemap = use_sitemap
 
     async def discover(self) -> List[str]:
-        site = SitemapDiscoverer(self.base_url)
-        try:
-            urls = await site.discover_urls()
-        except Exception as e:
-            self.logger.warning(f"Sitemap discover failed: {e}")
-            urls = []
+        urls: List[str] = []
+
+        if self.use_sitemap:
+            try:
+                urls = await SitemapDiscoverer(self.base_url).discover_urls()
+            except Exception as e:
+                self.logger.warning(f"Sitemap discover failed: {e}")
 
         if not urls:
             self.logger.info("No URLs from sitemap; falling back to HTTP crawler")
             crawler = HttpAsyncCrawler(self.base_url)
-            try:
-                urls = await crawler.run()
-                self.logger.info(f"HTTP crawler found {len(urls)} URLs")
-            finally:
-                await crawler.close()
+            urls = await crawler.run()
+            await crawler.close()
 
         urls = [u for u in urls if isinstance(u, str) and u.startswith(("http://", "https://"))]
         return self._postprocess(urls)
