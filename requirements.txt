@@ -1,3 +1,5 @@
+selectolax
+playwright
 urllib3
 requests==2.32.4
 beautifulsoup4==4.13.4

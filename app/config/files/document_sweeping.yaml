@@ -1,0 +1,20 @@
+document_sweeping:
+  output_dir: "downloads"
+  max_concurrency: 16
+  js_pages: 4
+  same_origin_only: true
+  doc_extensions: [pdf, doc, docx, xls, xlsx, ppt, pptx, txt, rtf, odt, csv]
+  doc_mime_types:
+    - application/pdf
+    - application/msword
+    - application/vnd.openxmlformats-officedocument.wordprocessingml.document
+    - application/vnd.ms-excel
+    - application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
+    - application/vnd.ms-powerpoint
+    - application/vnd.openxmlformats-officedocument.presentationml.presentation
+    - text/plain
+    - text/csv
+    - application/rtf
+  max_document_bytes: 52428800
+
+

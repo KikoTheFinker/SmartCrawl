@@ -2,7 +2,7 @@ from collections import defaultdict
 from typing import DefaultDict, Dict, Iterable, List, Tuple
 from urllib.parse import urlparse
 
-from app.url_discovery.core.patterns import ParsingPatterns
+from app.crawlers.url_discovery.utils.patterns import ParsingPatterns
 
 
 def _split_lang(path: str, patterns: ParsingPatterns) -> Tuple[str, str]:
@@ -39,3 +39,5 @@ def collapse_language_variants(urls: Iterable[str], default_langs: Iterable[str]
         out.extend(sorted(set(non_default if non_default else language_map.values())))
     out.extend(assets)
     return sorted(set(out))
+
+

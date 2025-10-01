@@ -1,4 +1,4 @@
-from app.url_discovery.core.sitemap_processor import SitemapDiscoveryProcessor
+from app.crawlers.url_discovery.core.sitemap_processor import SitemapDiscoveryProcessor
 
 
 class SitemapDiscoverer:

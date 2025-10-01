@@ -5,7 +5,7 @@ import httpx
 from bs4 import BeautifulSoup
 
 from app.logging.logger import setup_logger
-from app.url_discovery.utils.compression_utils import maybe_decompress
+from app.utils.compression_utils import maybe_decompress
 
 
 class SitemapParser:

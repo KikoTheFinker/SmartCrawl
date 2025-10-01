@@ -2,7 +2,7 @@ import gzip
 
 import brotli
 
-from app.exceptions import SitemapDiscoveryError
+from app.exceptions.exceptions import SitemapDiscoveryError
 
 
 def maybe_decompress(url: str, content: bytes) -> bytes:

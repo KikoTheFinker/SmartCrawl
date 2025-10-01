@@ -49,3 +49,5 @@ def load_patterns() -> ParsingPatterns:
         pagination_hints=pagination_hints,
         max_pagination_page=cfg.max_pagination_page,
     )
+
+

@@ -1,2 +1,3 @@
 test:
-  target_url: "pazar3.mk"   # e.g. "https://example.com" - the base URL to run sitemap discovery / crawling against
+  target_url: "https://e-ucebnici.mon.gov.mk"   # e.g. "https://example.com" - the base URL to run sitemap discovery / crawling against
+  use_sitemap: true

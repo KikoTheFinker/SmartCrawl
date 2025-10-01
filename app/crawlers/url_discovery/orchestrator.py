@@ -1,12 +1,12 @@
 from typing import List
 
 from app.config.loaders.url_discovery_config_loader import get_postprocess_config
+from app.crawlers.url_discovery.http_async_crawler import HttpAsyncCrawler
+from app.crawlers.url_discovery.sitemap_discoverer import SitemapDiscoverer
+from app.crawlers.url_discovery.utils.patterns import load_patterns
+from app.crawlers.url_discovery.utils.postprocess import collapse_language_variants
 from app.logging.logger import setup_logger
-from app.url_discovery.core.patterns import load_patterns
-from app.url_discovery.core.postprocess import collapse_language_variants
-from app.url_discovery.http_async_crawler import HttpAsyncCrawler
-from app.url_discovery.sitemap_discoverer import SitemapDiscoverer
-from app.url_discovery.utils.url_utils import normalize_base_url
+from app.utils.url_utils import normalize_base_url
 
 
 class UrlDiscoveryOrchestrator:

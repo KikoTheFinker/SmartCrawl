@@ -53,6 +53,17 @@ class UrlDiscoveryConfig(BaseModel):
 
 class TestConfig(BaseModel):
     target_url: str
+    use_sitemap: bool = True
+
+
+class DocumentSweepingConfig(BaseModel):
+    output_dir: str = "downloads"
+    max_concurrency: int = 16
+    js_pages: int = 4
+    same_origin_only: bool = True
+    doc_extensions: List[str]
+    doc_mime_types: List[str]
+    max_document_bytes: int
 
 
 class AppConfig(BaseModel):

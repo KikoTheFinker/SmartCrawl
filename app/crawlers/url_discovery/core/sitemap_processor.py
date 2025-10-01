@@ -6,12 +6,12 @@ from urllib.parse import urljoin, urlparse
 import httpx
 
 from app.config.loaders.url_discovery_config_loader import get_sitemap_config
-from app.exceptions import SitemapDiscoveryError
+from app.crawlers.url_discovery.core.sitemap_parser import SitemapParser
+from app.exceptions.exceptions import SitemapDiscoveryError
 from app.logging.logger import setup_logger
-from app.url_discovery.core.async_worker_pool import QueueProcessor
-from app.url_discovery.core.sitemap_parser import SitemapParser
-from app.url_discovery.utils.compression_utils import maybe_decompress
-from app.url_discovery.utils.url_utils import normalize_base_url
+from app.utils.async_worker_pool import QueueProcessor
+from app.utils.compression_utils import maybe_decompress
+from app.utils.url_utils import normalize_base_url
 
 
 class SitemapUrlCollector:

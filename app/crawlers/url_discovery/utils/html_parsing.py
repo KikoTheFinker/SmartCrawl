@@ -2,8 +2,8 @@ from typing import Optional, Set
 
 from bs4 import BeautifulSoup
 
-from app.url_discovery.core.normalize import normalize_link
-from app.url_discovery.core.patterns import ParsingPatterns
+from app.crawlers.url_discovery.utils.normalize import normalize_link
+from app.crawlers.url_discovery.utils.patterns import ParsingPatterns
 
 
 def is_probably_html_url(u: Optional[str], patterns: ParsingPatterns) -> bool:
@@ -62,3 +62,5 @@ def extract_links(
             add(normalize_link(base_url, m.group("u"), patterns))
 
     return out
+
+

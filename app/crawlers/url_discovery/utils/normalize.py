@@ -1,6 +1,6 @@
 from typing import Tuple
 
-from app.url_discovery.core.patterns import ParsingPatterns
+from app.crawlers.url_discovery.utils.patterns import ParsingPatterns
 
 
 def canonical_netloc(scheme: str, netloc: str, strip_www: bool, prefer_https: bool) -> Tuple[str, str]:
@@ -83,3 +83,5 @@ def same_domain(url: str, root_netloc: str, include_subdomains: bool) -> bool:
             return True
 
     return netloc == root or (include_subdomains and netloc.endswith("." + root))
+
+
