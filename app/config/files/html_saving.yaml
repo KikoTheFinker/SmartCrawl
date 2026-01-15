@@ -1,0 +1,21 @@
+html_saving:
+  enabled: true
+  output_dir: "html_output"
+  save_raw: true           # Save original HTML files
+  save_processed: true     # Save processed clean text
+  output_format: "txt"     # Output format: txt or markdown
+  include_tables: true     # Include table content in processed output
+  include_links: false     # Include hyperlinks in processed output
+  min_content_length: 100  # Minimum content length to save
+  
+  # Extraction mode for processed text:
+  # - "full_text": Extract ALL visible text from page (navigation, headers, content, footers)
+  # - "main_content": Extract only main article content (uses Trafilatura, removes nav/ads/boilerplate)
+  extraction_mode: "full_text"
+  
+  # JavaScript rendering options (uses Playwright)
+  use_playwright: false    # Enable JS rendering for dynamic sites (slower but gets full content)
+  playwright_timeout: 30000  # Page load timeout in ms
+  scroll_page: true        # Scroll page to trigger lazy loading
+  wait_for_idle: true      # Wait for network idle before capturing
+  playwright_concurrency: 4  # Max parallel browser pages (keep low, browsers are heavy)

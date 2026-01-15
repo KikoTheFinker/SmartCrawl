@@ -2,3 +2,4 @@ include:
   - test.yaml
   - url_discovery.yaml
   - document_sweeping.yaml
+  - html_saving.yaml

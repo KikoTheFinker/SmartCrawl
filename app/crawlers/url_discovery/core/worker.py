@@ -1,17 +1,21 @@
 import asyncio
-from typing import Set
+from typing import Optional, Set
 
 import httpx
 
 from app.crawlers.url_discovery.core.fetcher import HtmlFetcher
+from app.crawlers.url_discovery.utils.html_content_processor import HtmlContentSaver
 from app.crawlers.url_discovery.utils.html_parsing import extract_links, is_probably_html_url
 from app.crawlers.url_discovery.utils.normalize import same_domain
+from app.crawlers.url_discovery.utils.playwright_fetcher import PlaywrightHtmlFetcher
 from app.utils.robots_cache import robots_cache
 
 
 class CrawlerWorker:
     def __init__(self, cfg, patterns, q: asyncio.PriorityQueue, seen: Set[str], found: Set[str],
-                 sem: asyncio.Semaphore, root_netloc: str, logger, headers=None):
+                 sem: asyncio.Semaphore, root_netloc: str, logger, headers=None,
+                 html_saver: Optional[HtmlContentSaver] = None,
+                 playwright_fetcher: Optional[PlaywrightHtmlFetcher] = None):
         self.cfg = cfg
         self.patterns = patterns
         self.q = q
@@ -21,11 +25,15 @@ class CrawlerWorker:
         self.root_netloc = root_netloc
         self.logger = logger
         self.client = httpx.AsyncClient(headers=headers or {}, timeout=15.0, http2=True)
+        self.html_saver = html_saver
+        self.playwright_fetcher = playwright_fetcher
 
         self.fetcher = HtmlFetcher(self.client, patterns, logger)
 
     async def close(self):
         await self.client.aclose()
+        if self.playwright_fetcher:
+            await self.playwright_fetcher.close()
 
     async def _allowed(self, url: str) -> bool:
         if not same_domain(url, self.root_netloc, self.cfg.include_subdomains):
@@ -53,9 +61,22 @@ class CrawlerWorker:
 
                 async with self.sem:
                     self.seen.add(url)
-                    html = await self.fetcher.fetch_html(url, verbose=self.cfg.verbose)
+                    
+                    # Use Playwright for JS rendering if configured, otherwise use httpx
+                    if self.playwright_fetcher:
+                        html = await self.playwright_fetcher.fetch_html(url, verbose=self.cfg.verbose)
+                    else:
+                        html = await self.fetcher.fetch_html(url, verbose=self.cfg.verbose)
+                    
                     if not html:
                         continue
+
+                    # Save HTML content if saver is configured
+                    if self.html_saver:
+                        try:
+                            self.html_saver.save(url, html, self.logger)
+                        except Exception as e:
+                            self.logger.warning(f"Failed to save HTML for {url}: {e}")
 
                     links = extract_links(url, html,
                                           include_assets=self.cfg.include_assets,

@@ -77,11 +77,27 @@ def same_domain(url: str, root_netloc: str, include_subdomains: bool) -> bool:
     netloc = urlparse(url).netloc.lower()
     root = root_netloc.lower()
 
-    if not root.startswith("www.") and netloc.startswith("www."):
-        netloc_without_www = netloc[4:]
-        if netloc_without_www == root:
+    # Handle www variations: treat www.example.com and example.com as the same
+    root_without_www = root[4:] if root.startswith("www.") else root
+    netloc_without_www = netloc[4:] if netloc.startswith("www.") else netloc
+    
+    # Compare without www
+    if root_without_www == netloc_without_www:
+        return True
+
+    # Original comparison (with www)
+    if netloc == root:
+        return True
+
+    # Subdomain check
+    if include_subdomains:
+        # Check if netloc is a subdomain of root (without www)
+        if netloc.endswith("." + root_without_www):
+            return True
+        # Check if root is a subdomain of netloc (without www)
+        if root_without_www.endswith("." + netloc_without_www):
             return True
 
-    return netloc == root or (include_subdomains and netloc.endswith("." + root))
+    return False
 
 

@@ -1,20 +1,26 @@
 import asyncio
-from typing import List, Set, Tuple
+from typing import List, Optional, Set, Tuple
 from urllib.parse import urlparse
 
 from app.crawlers.url_discovery.core.worker import CrawlerWorker
+from app.crawlers.url_discovery.utils.html_content_processor import HtmlContentSaver
 from app.crawlers.url_discovery.utils.patterns import ParsingPatterns
+from app.crawlers.url_discovery.utils.playwright_fetcher import PlaywrightHtmlFetcher
 
 
 class BaseCrawler:
     """Core async crawler engine (internal use)."""
 
-    def __init__(self, start_url: str, cfg, site_cfg, patterns: ParsingPatterns, logger):
+    def __init__(self, start_url: str, cfg, site_cfg, patterns: ParsingPatterns, logger,
+                 html_saver: Optional[HtmlContentSaver] = None,
+                 playwright_fetcher: Optional[PlaywrightHtmlFetcher] = None):
         self.start_url = start_url.rstrip("/")
         self.cfg = cfg
         self.site_cfg = site_cfg
         self.patterns = patterns
         self.logger = logger
+        self.html_saver = html_saver
+        self.playwright_fetcher = playwright_fetcher
 
         self.seen: Set[str] = set()
         self.found: Set[str] = set()
@@ -31,6 +37,8 @@ class BaseCrawler:
             root_netloc=urlparse(self.start_url).netloc,
             logger=self.logger,
             headers=self.site_cfg.headers,
+            html_saver=self.html_saver,
+            playwright_fetcher=self.playwright_fetcher,
         )
 
     async def __aenter__(self):

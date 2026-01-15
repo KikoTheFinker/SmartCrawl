@@ -1,3 +1,8 @@
 test:
-  target_url: "https://e-ucebnici.mon.gov.mk"   # e.g. "https://example.com" - the base URL to run sitemap discovery / crawling against
-  use_sitemap: true
+  # Small test sites with PDFs you can use:
+  # - https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf (has a test PDF)
+  # - https://file-examples.com (has sample PDFs)
+  # - https://www.learningcontainer.com/sample-pdf-file/ (has sample PDFs)
+  # For a small site to crawl, try: https://quotes.toscrape.com (no PDFs but good for testing crawler)
+  target_url: "https://www.learningcontainer.com"   # Small test site - good for initial testing
+  use_sitemap: false  # This site doesn't have a sitemap, so set to false

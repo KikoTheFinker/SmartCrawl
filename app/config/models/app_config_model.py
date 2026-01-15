@@ -64,8 +64,30 @@ class DocumentSweepingConfig(BaseModel):
     doc_extensions: List[str]
     doc_mime_types: List[str]
     max_document_bytes: int
+    click_download_buttons: bool = True  # Click JS download buttons (WordPress Download Manager, etc.)
+
+
+class HtmlSavingConfig(BaseModel):
+    """Configuration for saving and processing HTML content."""
+    enabled: bool = False
+    output_dir: str = "html_output"
+    save_raw: bool = True
+    save_processed: bool = True
+    output_format: str = "txt"  # txt, markdown
+    include_tables: bool = True
+    include_links: bool = False
+    min_content_length: int = 100
+    extraction_mode: str = "full_text"  # "main_content" (article only) or "full_text" (all visible text)
+    
+    # JavaScript rendering options (uses Playwright)
+    use_playwright: bool = False  # Enable JS rendering for dynamic sites
+    playwright_timeout: int = 30000  # Page load timeout in ms
+    scroll_page: bool = True  # Scroll page to trigger lazy loading
+    wait_for_idle: bool = True  # Wait for network idle before capturing
+    playwright_concurrency: int = 4  # Max parallel browser pages (lower than httpx)
 
 
 class AppConfig(BaseModel):
     test: TestConfig
     url_discovery: UrlDiscoveryConfig
+    html_saving: HtmlSavingConfig = HtmlSavingConfig()

@@ -6,7 +6,11 @@ import httpx
 from playwright.async_api import async_playwright
 
 from app.crawlers.document_downloader.utils.doc_download import download_file
-from app.crawlers.document_downloader.utils.doc_extractors import extract_links_httpx, extract_with_playwright
+from app.crawlers.document_downloader.utils.doc_extractors import (
+    extract_links_httpx, 
+    extract_with_playwright,
+    click_download_buttons,
+)
 from app.crawlers.document_downloader.utils.doc_filters import looks_like_doc_by_ext
 from app.crawlers.document_downloader.utils.doc_normalization import normalize_doc_url
 from app.logging.logger import setup_logger
@@ -23,6 +27,7 @@ class DocumentDownloader:
             max_concurrency: int,
             js_pages: int,
             same_origin_only: bool,
+            click_download_buttons: bool = True,  # NEW: click JS download buttons
     ) -> None:
         self.output_dir = output_dir
         self.allowed_mime_types = {m.lower() for m in allowed_mime_types}
@@ -31,6 +36,7 @@ class DocumentDownloader:
         self.max_concurrency = max(1, int(max_concurrency))
         self.js_pages = max(0, int(js_pages))
         self.same_origin_only = bool(same_origin_only)
+        self.click_download_buttons_enabled = click_download_buttons
         self.logger = setup_logger(__name__)
         self._global_seen_docs: Set[str] = set()
         self._global_seen_hashes: Set[str] = set()
@@ -96,6 +102,24 @@ class DocumentDownloader:
         doc_candidates = [
             u for u in links if looks_like_doc_by_ext(u, self.allowed_extensions)
         ]
+        
+        # Try clicking download buttons first (for JS download managers)
+        js_downloaded: List[str] = []
+        if context and self.click_download_buttons_enabled:
+            try:
+                js_downloaded = await click_download_buttons(
+                    context,
+                    url,
+                    self.output_dir,
+                    self.allowed_extensions,
+                    self.logger,
+                )
+                if js_downloaded:
+                    self.logger.info(f"Downloaded {len(js_downloaded)} files via JS buttons from {url}")
+            except Exception as e:
+                self.logger.debug(f"Click download buttons failed for {url}: {e}")
+        
+        # If no direct doc links found and page looks JS-rendered, try Playwright extraction
         if context and not doc_candidates and looks_js:
             self.logger.debug(f"Trying Playwright for {url} (httpx found no docs)")
             _, links_js, responses = await extract_with_playwright(context, url)
@@ -113,10 +137,10 @@ class DocumentDownloader:
 
         doc_candidates = [u for u in dict.fromkeys(doc_candidates)]
         self.logger.info(
-            f"Page scanned: {url} candidates={len(doc_candidates)} js={looks_js}"
+            f"Page scanned: {url} candidates={len(doc_candidates)} js={looks_js} js_downloads={len(js_downloaded)}"
         )
 
-        downloaded: List[str] = []
+        downloaded: List[str] = list(js_downloaded)  # Start with JS-downloaded files
         seen: Set[str] = set()
 
         for doc_url in doc_candidates:

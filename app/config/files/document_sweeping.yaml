@@ -16,5 +16,10 @@ document_sweeping:
     - text/csv
     - application/rtf
   max_document_bytes: 52428800
+  
+  # JavaScript download manager support
+  # When enabled, Playwright will click on download buttons to capture files
+  # from sites using WordPress Download Manager, Easy Digital Downloads, etc.
+  click_download_buttons: true
 
 
