@@ -4,5 +4,5 @@ test:
   # - https://file-examples.com (has sample PDFs)
   # - https://www.learningcontainer.com/sample-pdf-file/ (has sample PDFs)
   # For a small site to crawl, try: https://quotes.toscrape.com (no PDFs but good for testing crawler)
-  target_url: "https://www.learningcontainer.com"   # Small test site - good for initial testing
+  target_url: "https://pdfobject.com"   # Small test site - good for initial testing
   use_sitemap: false  # This site doesn't have a sitemap, so set to false

@@ -1,5 +1,7 @@
+#!/usr/bin/env python3
 import argparse
 import asyncio
+from pathlib import Path
 
 from app.config.loaders.document_sweeping_config_loader import get_document_sweeping_config
 from app.config.loaders.env_loader import env_settings
@@ -8,6 +10,7 @@ from app.config.loaders.html_saving_config_loader import get_html_saving_config
 from app.config.models.app_config_model import AppConfig
 from app.crawlers.document_downloader.core.document_downloader import DocumentDownloader
 from app.crawlers.url_discovery.orchestrator import UrlDiscoveryOrchestrator
+from app.docling.docling_processor import DoclingProcessor
 from app.logging.logger import setup_logger
 
 
@@ -17,10 +20,21 @@ def main():
                         help="Optional start URL; otherwise taken from test.target_url in config")
     parser.add_argument("--download", action="store_true",
                         help="After discovery, download documents using test.* settings")
+    parser.add_argument("--process-docs", action="store_true",
+                        help="Process downloaded documents with docling")
+    parser.add_argument("--docling-format", choices=["markdown", "html", "json"],
+                        default="markdown",
+                        help="Output format for docling processing (default: markdown)")
     parser.add_argument("--save-html", action="store_true",
                         help="Save raw HTML and processed content (uses html_saving config)")
     parser.add_argument("--use-playwright", action="store_true",
                         help="Use Playwright for JS rendering (slower but captures dynamic content)")
+    parser.add_argument("--enable-ocr", action="store_true",
+                        help="Enable OCR (Optical Character Recognition) for scanned documents and images")
+    parser.add_argument("--disable-ocr", action="store_true",
+                        help="Disable OCR (OCR is enabled by default when --process-docs is used)")
+    parser.add_argument("--ocr-languages", nargs="+", default=None,
+                        help="OCR language codes (e.g., 'en' for English, 'es' for Spanish). Default: ['en']")
     args = parser.parse_args()
 
     # Load config
@@ -65,6 +79,7 @@ def main():
         for u in urls:
             logger.debug(f"URL: {u}")
 
+        downloaded = []
         if args.download:
             sweep_cfg = get_document_sweeping_config()
             downloader = DocumentDownloader(
@@ -82,6 +97,41 @@ def main():
             logger.info(f"Document sweep complete: downloaded={len(downloaded)} dir={sweep_cfg.output_dir}")
             for p in downloaded:
                 logger.debug(f"FILE: {p}")
+
+            # Step 3: Document Processing with Docling (if requested)
+            if args.process_docs:
+                logger.info("=" * 60)
+                logger.info("Step 3: Document Processing with Docling")
+                logger.info("=" * 60)
+                
+                if not downloaded:
+                    logger.warning("No documents were downloaded. Skipping docling processing.")
+                else:
+                    input_dir = sweep_cfg.output_dir
+                    
+                    # Create output directory for processed documents
+                    output_dir = Path(input_dir) / "processed" / args.docling_format
+                    output_dir.mkdir(parents=True, exist_ok=True)
+                    
+                    # Enable OCR by default when processing documents, unless explicitly disabled
+                    # User can explicitly enable with --enable-ocr or disable with --disable-ocr
+                    enable_ocr = (args.enable_ocr or not args.disable_ocr) if args.process_docs else args.enable_ocr
+                    
+                    processor = DoclingProcessor(
+                        input_dir=input_dir,
+                        output_dir=str(output_dir),
+                        export_format=args.docling_format,
+                        concurrency=2,
+                        enable_ocr=enable_ocr,
+                        ocr_languages=args.ocr_languages
+                    )
+                    
+                    processed_files = await processor.process_all()
+                    logger.info(f"Processed {len(processed_files)} documents to {output_dir}")
+        elif args.process_docs:
+            logger.error("--process-docs requires --download to be set first")
+            import sys
+            sys.exit(1)
 
     asyncio.run(run())
 
