@@ -32,7 +32,7 @@ url_discovery:
     html_only: true
     max_pages: 4000
     concurrency: 30
-    obey_robots: true
+    obey_robots: false  # Set to false to crawl sites that block bots in robots.txt
     verbose: true
 
   postprocess:

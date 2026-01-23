@@ -50,6 +50,47 @@ def get_trafilatura_config():
     return config
 
 
+def _extract_text_with_links(soup, base_url: str) -> str:
+    """
+    Extract text from BeautifulSoup object, preserving links with their hrefs.
+    
+    Format: "Link Text [URL]" for each link found.
+    """
+    from urllib.parse import urljoin
+    
+    # Create a copy to avoid modifying the original
+    soup_copy = BeautifulSoup(str(soup), "lxml")
+    
+    # Find all links and replace them with formatted text
+    for link in soup_copy.find_all('a', href=True):
+        href = link.get('href', '').strip()
+        link_text = link.get_text(strip=True)
+        
+        # Skip empty links or javascript/mailto links
+        if not href or href.startswith(('javascript:', 'mailto:', '#')):
+            # Keep just the text
+            link.replace_with(link_text if link_text else '')
+            continue
+        
+        # Resolve relative URLs
+        if href.startswith(('http://', 'https://')):
+            full_url = href
+        else:
+            full_url = urljoin(base_url, href)
+        
+        # Replace link with formatted text: "Link Text [URL]"
+        if link_text:
+            link.replace_with(f"{link_text} [{full_url}]")
+        else:
+            # Link with no text, just show URL
+            link.replace_with(f"[{full_url}]")
+    
+    # Now extract text normally (links are already formatted)
+    text = soup_copy.get_text(separator="\n", strip=True)
+    
+    return text
+
+
 def extract_site_common_elements(html: str, domain: str) -> SiteCommonContent:
     """
     Extract common site elements (header, footer, sidebar) that are typically
@@ -136,12 +177,17 @@ def extract_site_common_elements(html: str, domain: str) -> SiteCommonContent:
     )
 
 
-def extract_full_text(html: str, url: str) -> Optional[ProcessedContent]:
+def extract_full_text(html: str, url: str, include_links: bool = True) -> Optional[ProcessedContent]:
     """
     Extract visible text from HTML using BeautifulSoup.
     
     Removes headers, footers, navigation, and other boilerplate elements
     that are duplicated across pages.
+    
+    Args:
+        html: Raw HTML content
+        url: Source URL (for resolving relative links)
+        include_links: If True, include links as "Link Text [URL]"
     """
     import json
     
@@ -175,86 +221,7 @@ def extract_full_text(html: str, url: str) -> Optional[ProcessedContent]:
     
     soup = BeautifulSoup(html, "lxml")
     
-    # Remove script, style, and non-content elements
-    for element in soup(["script", "style", "noscript", "iframe", "svg"]):
-        element.decompose()
-    
-    # Remove header elements (navigation, site header, etc.)
-    header_selectors = [
-        "header",
-        "nav", 
-        "[role='banner']",
-        "[role='navigation']",
-        ".header",
-        ".site-header",
-        ".page-header",
-        ".navbar",
-        ".nav",
-        ".navigation",
-        ".menu",
-        ".top-bar",
-        "#header",
-        "#nav",
-        "#navigation",
-        "#menu",
-        "#masthead",
-    ]
-    for selector in header_selectors:
-        for element in soup.select(selector):
-            element.decompose()
-    
-    # Remove footer elements
-    footer_selectors = [
-        "footer",
-        "[role='contentinfo']",
-        ".footer",
-        ".site-footer",
-        ".page-footer",
-        "#footer",
-        "#colophon",
-        ".copyright",
-        ".bottom-bar",
-    ]
-    for selector in footer_selectors:
-        for element in soup.select(selector):
-            element.decompose()
-    
-    # Remove sidebar elements
-    sidebar_selectors = [
-        "aside",
-        "[role='complementary']",
-        ".sidebar",
-        ".widget-area",
-        ".side-bar",
-        "#sidebar",
-        "#secondary",
-    ]
-    for selector in sidebar_selectors:
-        for element in soup.select(selector):
-            element.decompose()
-    
-    # Remove common non-content elements
-    other_selectors = [
-        ".breadcrumb",
-        ".breadcrumbs",
-        ".social-share",
-        ".share-buttons",
-        ".related-posts",
-        ".comments",
-        "#comments",
-        ".advertisement",
-        ".ad",
-        ".ads",
-        "[class*='cookie']",
-        "[class*='popup']",
-        "[class*='modal']",
-        ".skip-link",
-        ".screen-reader-text",
-    ]
-    for selector in other_selectors:
-        for element in soup.select(selector):
-            element.decompose()
-    
+    # Extract metadata BEFORE removing head section
     # Get title
     title = None
     title_tag = soup.find("title")
@@ -264,18 +231,18 @@ def extract_full_text(html: str, url: str) -> Optional[ProcessedContent]:
     if not title:
         og_title = soup.find("meta", property="og:title")
         if og_title:
-            title = og_title.get("content", "")
+            title = og_title.get("content", "").strip()
     
     # Get meta description
     description = None
     meta_desc = soup.find("meta", attrs={"name": "description"})
     if meta_desc:
-        description = meta_desc.get("content", "")
+        description = meta_desc.get("content", "").strip()
     # Try og:description as fallback
     if not description:
         og_desc = soup.find("meta", property="og:description")
         if og_desc:
-            description = og_desc.get("content", "")
+            description = og_desc.get("content", "").strip()
     
     # Get author from various sources (fallback if JSON-LD didn't have it)
     author = jsonld_author
@@ -283,12 +250,12 @@ def extract_full_text(html: str, url: str) -> Optional[ProcessedContent]:
         # Try meta author
         meta_author = soup.find("meta", attrs={"name": "author"})
         if meta_author:
-            author = meta_author.get("content", "")
+            author = meta_author.get("content", "").strip()
     if not author:
         # Try article:author
         article_author = soup.find("meta", property="article:author")
         if article_author:
-            author = article_author.get("content", "")
+            author = article_author.get("content", "").strip()
     if not author:
         # Try schema.org author
         schema_author = soup.find("span", itemprop="author")
@@ -308,12 +275,12 @@ def extract_full_text(html: str, url: str) -> Optional[ProcessedContent]:
         # Try article:published_time
         pub_time = soup.find("meta", property="article:published_time")
         if pub_time:
-            date = pub_time.get("content", "")
+            date = pub_time.get("content", "").strip()
     if not date:
         # Try article:modified_time as fallback
         mod_time = soup.find("meta", property="article:modified_time")
         if mod_time:
-            date = mod_time.get("content", "")
+            date = mod_time.get("content", "").strip()
     if not date:
         # Try datePublished schema.org
         date_elem = soup.find(itemprop="datePublished")
@@ -325,13 +292,208 @@ def extract_full_text(html: str, url: str) -> Optional[ProcessedContent]:
         if time_tag:
             date = time_tag.get("datetime") or time_tag.get_text(strip=True)
     
-    # Get all visible text
-    text = soup.get_text(separator="\n", strip=True)
+    # Try to find main content area FIRST (before removing anything)
+    # This ensures we preserve the main content even if it's nested
+    main_content = None
+    
+    # Priority 1: Most specific content selectors (usually contain the actual article content)
+    priority_selectors = [
+        ".post-content",
+        ".entry-content",
+        "article .post-content",
+        "article .entry-content",
+        "#content .post-content",
+        "#content .entry-content",
+    ]
+    
+    for selector in priority_selectors:
+        main_elem = soup.select_one(selector)
+        if main_elem:
+            text_len = len(main_elem.get_text(strip=True))
+            if text_len > 50:  # Has substantial content
+                main_content = main_elem
+                break
+    
+    # Priority 2: Main content containers
+    if not main_content:
+        main_selectors = [
+            "main",
+            "article",
+            "[role='main']",
+            "#content",
+            "#main-content",
+            ".page-content",
+            ".main-content",
+        ]
+        
+        for selector in main_selectors:
+            main_elem = soup.select_one(selector)
+            if main_elem:
+                text_len = len(main_elem.get_text(strip=True))
+                if text_len > 100:  # Has substantial content
+                    main_content = main_elem
+                    break
+    
+    # Priority 3: Broader selectors (last resort)
+    if not main_content:
+        for selector in [".content", "[class*='content']"]:
+            main_elem = soup.select_one(selector)
+            if main_elem:
+                # Check if it has substantial content (not just a wrapper)
+                text_len = len(main_elem.get_text(strip=True))
+                if text_len > 200:  # Needs more content to avoid false positives
+                    main_content = main_elem
+                    break
+    
+    # NOW remove head section (after extracting metadata and finding main content)
+    head = soup.find("head")
+    if head:
+        head.decompose()
+    
+    # Remove script, style, and non-content elements
+    for element in soup(["script", "style", "noscript", "iframe", "svg"]):
+        element.decompose()
+    
+    # If we found main content, clean it up by removing nested boilerplate
+    if main_content:
+        # Remove nested navigation/header/footer from main content
+        for nested_nav in main_content.select("nav, header, footer, aside, .menu, .navigation, .breadcrumb, .breadcrumbs"):
+            nested_nav.decompose()
+        # Remove nested scripts/styles that might have been missed
+        for nested_script in main_content.select("script, style, noscript"):
+            nested_script.decompose()
+    else:
+        # No main content found, remove header/footer/sidebar from whole page
+        # Remove header elements (navigation, site header, etc.)
+        header_selectors = [
+            "header",
+            "nav", 
+            "[role='banner']",
+            "[role='navigation']",
+            ".header",
+            ".site-header",
+            ".page-header",
+            ".navbar",
+            ".nav",
+            ".navigation",
+            ".menu",
+            ".top-bar",
+            "#header",
+            "#nav",
+            "#navigation",
+            "#menu",
+            "#masthead",
+        ]
+        for selector in header_selectors:
+            for element in soup.select(selector):
+                element.decompose()
+        
+        # Remove footer elements
+        footer_selectors = [
+            "footer",
+            "[role='contentinfo']",
+            ".footer",
+            ".site-footer",
+            ".page-footer",
+            "#footer",
+            "#colophon",
+            ".copyright",
+            ".bottom-bar",
+        ]
+        for selector in footer_selectors:
+            for element in soup.select(selector):
+                element.decompose()
+        
+        # Remove sidebar elements
+        sidebar_selectors = [
+            "aside",
+            "[role='complementary']",
+            ".sidebar",
+            ".widget-area",
+            ".side-bar",
+            "#sidebar",
+            "#secondary",
+        ]
+        for selector in sidebar_selectors:
+            for element in soup.select(selector):
+                element.decompose()
+        
+        # Remove common non-content elements
+        other_selectors = [
+            ".breadcrumb",
+            ".breadcrumbs",
+            ".social-share",
+            ".share-buttons",
+            ".related-posts",
+            ".comments",
+            "#comments",
+            ".advertisement",
+            ".ad",
+            ".ads",
+            "[class*='cookie']",
+            "[class*='popup']",
+            "[class*='modal']",
+            ".skip-link",
+            ".screen-reader-text",
+        ]
+        for selector in other_selectors:
+            for element in soup.select(selector):
+                element.decompose()
+    
+    # Extract text from main content area if found, otherwise from whole page
+    if main_content:
+        if include_links:
+            # Extract text with links
+            text_parts = []
+            for elem in main_content.find_all(text=True):
+                parent = elem.parent
+                if parent and parent.name == 'a':
+                    href = parent.get('href', '')
+                    link_text = elem.strip()
+                    if link_text:
+                        text_parts.append(f"{link_text} [{href}]")
+                elif elem.strip():
+                    text_parts.append(elem.strip())
+            text = "\n".join(text_parts)
+        else:
+            text = main_content.get_text(separator="\n", strip=True)
+    else:
+        # Fallback: extract from whole page (already had header/footer/sidebar removed)
+        if include_links:
+            # Extract text with links
+            text_parts = []
+            for elem in soup.find_all(text=True):
+                parent = elem.parent
+                if parent and parent.name == 'a':
+                    href = parent.get('href', '')
+                    link_text = elem.strip()
+                    if link_text:
+                        text_parts.append(f"{link_text} [{href}]")
+                elif elem.strip():
+                    text_parts.append(elem.strip())
+            text = "\n".join(text_parts)
+        else:
+            text = soup.get_text(separator="\n", strip=True)
     
     # Clean up multiple newlines
     text = re.sub(r'\n{3,}', '\n\n', text)
+    text = text.strip()
     
+    # Remove title from text if it appears at the start (to avoid duplication)
+    # The title is already stored separately in metadata
+    if title and text.startswith(title):
+        # Remove title and any following whitespace/newlines
+        text = text[len(title):].strip()
+        # Remove leading dashes or separators that might follow the title
+        text = re.sub(r'^[–—\-–\s]+', '', text)
+    
+    # Final validation: ensure we have substantial content (not just title)
     if not text or len(text.strip()) < 50:
+        return None
+    
+    # Additional check: if text is too similar to just the title, it's probably not valid content
+    if title and len(text.strip()) < len(title) * 1.5:
+        # Text is too short compared to title, likely just extracted title
         return None
     
     return ProcessedContent(
@@ -374,7 +536,7 @@ def extract_clean_content(
     
     # Use full text extraction if requested
     if extraction_mode == "full_text":
-        return extract_full_text(html, url)
+        return extract_full_text(html, url, include_links=include_links)
     
     # Use Trafilatura for main content extraction
     config = get_trafilatura_config()
@@ -393,7 +555,7 @@ def extract_clean_content(
     
     if not clean_text or len(clean_text.strip()) < 50:
         # Fallback to full text if main content extraction fails
-        return extract_full_text(html, url)
+        return extract_full_text(html, url, include_links=include_links)
     
     # Extract metadata
     metadata = trafilatura.extract_metadata(html, default_url=url)

@@ -42,7 +42,10 @@ class CrawlerWorker:
             return False
         if not self.cfg.obey_robots:
             return True
-        return await robots_cache.allowed(url, self.client)
+        allowed = await robots_cache.allowed(url, self.client)
+        if not allowed and self.cfg.verbose:
+            self.logger.info(f"Rejected (robots.txt): {url}")
+        return allowed
 
     async def run(self):
         while len(self.seen) < self.cfg.max_pages:
@@ -56,11 +59,24 @@ class CrawlerWorker:
                     continue
 
                 self.q.task_done()
-                if url in self.seen or not await self._allowed(url) or not is_probably_html_url(url, self.patterns):
+                
+                # Check if URL should be processed
+                if url in self.seen:
+                    self.logger.debug(f"Skipping (already seen): {url}")
+                    continue
+                
+                allowed = await self._allowed(url)
+                if not allowed:
+                    self.logger.info(f"Skipping (not allowed by robots.txt or domain): {url}")
+                    continue
+                
+                if not is_probably_html_url(url, self.patterns):
+                    self.logger.debug(f"Skipping (not HTML URL): {url}")
                     continue
 
                 async with self.sem:
                     self.seen.add(url)
+                    self.logger.info(f"Processing: {url}")
                     
                     # Use Playwright for JS rendering if configured, otherwise use httpx
                     if self.playwright_fetcher:
@@ -69,6 +85,7 @@ class CrawlerWorker:
                         html = await self.fetcher.fetch_html(url, verbose=self.cfg.verbose)
                     
                     if not html:
+                        self.logger.warning(f"Failed to fetch HTML (empty response): {url}")
                         continue
 
                     # Save HTML content if saver is configured
