@@ -1,6 +1,6 @@
 # SmartCrawl
 
-A web crawler for discovering URLs and downloading documents (PDFs, Word docs, etc.) from websites.
+Async web crawler for discovering URLs, downloading HTML from URLs and processing and downloading documents. Processes PDFs, DOCX and other formats using Docling, exporting to Markdown/JSON/HTML for chatbot and RAG applications.
 
 ## Setup
 
