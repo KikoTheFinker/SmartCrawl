@@ -1,4 +1,6 @@
 import asyncio
+import hashlib
+import json
 from pathlib import Path
 from typing import List, Optional
 
@@ -17,11 +19,22 @@ class DoclingProcessor:
         export_format: str,
         concurrency: int = 2,
         enable_ocr: bool = False,
-        ocr_languages: Optional[List[str]] = None
+        ocr_languages: Optional[List[str]] = None,
+        detect_language: bool = True,
+        language_provider: str = "fasttext",
+        language_model: str = "lite",
+        language_confidence_threshold: float = 0.60,
     ):
         self.input_dir = Path(input_dir)
         self.output_dir = Path(output_dir)
         self.concurrency = max(1, concurrency)
+        self.detect_language = detect_language
+        self.language_provider = language_provider
+        self.language_model = language_model
+        self.language_confidence_threshold = language_confidence_threshold
+        self._seen_input_hashes: set[str] = set()
+        self._seen_output_hashes: set[str] = set()
+        self._dedup_index_path = self.output_dir / ".docling_dedup_index.json"
 
         export_format = export_format.lower()
         if export_format not in EXPORTER_MAP:
@@ -52,6 +65,34 @@ class DoclingProcessor:
         
         self.converter = DocumentConverter(format_options=format_options if format_options else None)
         self.output_dir.mkdir(parents=True, exist_ok=True)
+        self._load_dedup_index()
+
+    def _file_sha256(self, path: Path) -> str:
+        sha = hashlib.sha256()
+        with path.open("rb") as f:
+            for chunk in iter(lambda: f.read(8192), b""):
+                sha.update(chunk)
+        return sha.hexdigest()
+
+    def _load_dedup_index(self):
+        if not self._dedup_index_path.exists():
+            return
+        try:
+            data = json.loads(self._dedup_index_path.read_text(encoding="utf-8"))
+            self._seen_input_hashes = set(data.get("input_hashes", []))
+            self._seen_output_hashes = set(data.get("output_hashes", []))
+        except Exception:
+            self._seen_input_hashes = set()
+            self._seen_output_hashes = set()
+
+    def _save_dedup_index(self):
+        payload = {
+            "input_hashes": sorted(self._seen_input_hashes),
+            "output_hashes": sorted(self._seen_output_hashes),
+        }
+        self._dedup_index_path.write_text(
+            json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
 
     async def process_all(self) -> List[Path]:
         tasks = []
@@ -62,10 +103,44 @@ class DoclingProcessor:
         results = await asyncio.gather(*tasks, return_exceptions=True)
         return [r for r in results if isinstance(r, Path)]
 
-    async def _process_one_async(self, file_path: Path) -> Path:
+    async def _process_one_async(self, file_path: Path) -> Optional[Path]:
         return await asyncio.to_thread(self._process_one, file_path)
 
-    def _process_one(self, file_path: Path) -> Path:
+    def _process_one(self, file_path: Path) -> Optional[Path]:
+        in_hash = self._file_sha256(file_path)
+        if in_hash in self._seen_input_hashes:
+            return None
+
         res = self.converter.convert(str(file_path))
         doc = res.document
-        return self.exporter.export(doc, file_path.stem, self.output_dir)
+        out_path = self.exporter.export(doc, file_path.stem, self.output_dir)
+        out_hash = self._file_sha256(out_path)
+        if out_hash in self._seen_output_hashes:
+            out_path.unlink(missing_ok=True)
+            self._seen_input_hashes.add(in_hash)
+            self._save_dedup_index()
+            return None
+
+        # Detect language from the exported text and rename with prefix
+        from app.utils.language_detector import detect_language, prefix_filename_with_lang
+
+        lang = "und"
+        if self.detect_language:
+            try:
+                text = out_path.read_text(encoding="utf-8")
+                lang = detect_language(
+                    text,
+                    provider=self.language_provider,
+                    model=self.language_model,
+                    min_confidence=self.language_confidence_threshold,
+                )
+            except Exception:
+                lang = "und"
+
+        new_name = prefix_filename_with_lang(lang, out_path.name)
+        new_path = out_path.with_name(new_name)
+        out_path.rename(new_path)
+        self._seen_input_hashes.add(in_hash)
+        self._seen_output_hashes.add(out_hash)
+        self._save_dedup_index()
+        return new_path

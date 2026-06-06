@@ -1,6 +1,6 @@
 import asyncio
 import re
-from typing import List, Set
+from typing import List, Set, Optional
 from urllib.parse import urljoin, urlparse
 
 import httpx
@@ -105,7 +105,7 @@ class SitemapUrlDiscoverer:
                 self.logger.warning(f"Failed to check common sitemap: {result}")
         return found
 
-    async def _check_common_sitemap_url(self, url: str) -> str | None:
+    async def _check_common_sitemap_url(self, url: str) -> Optional[str]:
         self.logger.info(f"Trying common sitemap path: {url}")
         try:
             response = await self.client.get(url)

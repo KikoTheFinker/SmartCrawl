@@ -1,4 +1,5 @@
-from typing import List, Tuple, Optional
+from typing import List, Tuple, Optional, Set
+import hashlib
 import os
 import httpx
 from selectolax.parser import HTMLParser
@@ -74,18 +75,31 @@ async def extract_with_playwright(context, url: str, scroll_rounds: int = 2,
     return html, list(dict.fromkeys(links)), responses
 
 
+def _hash_file(path: str) -> str:
+    """Compute SHA-256 digest of a file on disk."""
+    sha256 = hashlib.sha256()
+    with open(path, "rb") as fh:
+        for chunk in iter(lambda: fh.read(8192), b""):
+            sha256.update(chunk)
+    return sha256.hexdigest()
+
+
 async def click_download_buttons(
     context, 
     url: str, 
     output_dir: str,
     allowed_extensions: set,
     logger=None,
+    seen_hashes: Optional[Set[str]] = None,
 ) -> List[str]:
     """
     Click download buttons on a page and capture any file downloads.
     
     This handles JavaScript-based download managers that don't use direct links.
     Returns list of downloaded file paths.
+    
+    If *seen_hashes* is provided, each downloaded file is hash-checked
+    and removed if it duplicates an already-seen document.
     """
     downloaded_files: List[str] = []
     page = await context.new_page()
@@ -134,6 +148,17 @@ async def click_download_buttons(
                         counter += 1
                     
                     await download.save_as(save_path)
+
+                    # --- content-hash deduplication ---
+                    if seen_hashes is not None:
+                        digest = _hash_file(save_path)
+                        if digest in seen_hashes:
+                            os.remove(save_path)
+                            if logger:
+                                logger.debug(f"Skip duplicate by content (JS click): {filename}")
+                            continue
+                        seen_hashes.add(digest)
+
                     downloaded_files.append(save_path)
                     if logger:
                         logger.info(f"Downloaded (via click): {filename} -> {save_path}")
@@ -149,8 +174,13 @@ async def click_download_buttons(
                 continue
                 
     except Exception as e:
-        if logger:
-            logger.warning(f"Error clicking download buttons on {url}: {e}")
+        # Suppress scary traceback if it's just a timeout
+        if "Timeout" in str(e):
+            if logger:
+                logger.debug(f"Timeout clicking download buttons on {url}: {e}")
+        else:
+            if logger:
+                logger.warning(f"Error clicking download buttons on {url}: {e}")
     finally:
         await page.close()
     
@@ -249,7 +279,7 @@ async def intercept_downloads_on_page(
     return downloaded_files
 
 
-def normalize_url(base: str, href: str) -> str | None:
+def normalize_url(base: str, href: str) -> Optional[str]:
     if not href:
         return None
     href = href.strip()

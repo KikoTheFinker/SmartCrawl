@@ -31,6 +31,7 @@ url_discovery:
     include_assets: false
     html_only: true
     max_pages: 4000
+    max_depth: 15
     concurrency: 30
     obey_robots: false  # Set to false to crawl sites that block bots in robots.txt
     verbose: true
@@ -119,6 +120,7 @@ url_discovery:
       - ref_src
       - ref_url
       - yclid
+      - qt-novo_na_sitel
     language_segment_pattern: "^/([a-z]{2})(?:/|$)"
     pagination_hints:
       - page

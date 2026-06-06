@@ -29,6 +29,7 @@ class ProcessedContent:
     description: Optional[str] = None
     author: Optional[str] = None
     date: Optional[str] = None
+    language: Optional[str] = None
 
 
 @dataclass
@@ -603,6 +604,10 @@ class HtmlContentSaver:
         include_tables: bool = True,
         include_links: bool = False,
         extraction_mode: str = "full_text",  # "main_content" or "full_text"
+        detect_language: bool = True,
+        language_provider: str = "fasttext",
+        language_model: str = "lite",
+        language_confidence_threshold: float = 0.60,
     ):
         self.output_dir = output_dir
         self.save_raw = save_raw
@@ -611,11 +616,18 @@ class HtmlContentSaver:
         self.include_tables = include_tables
         self.include_links = include_links
         self.extraction_mode = extraction_mode
+        self.detect_language = detect_language
+        self.language_provider = language_provider
+        self.language_model = language_model
+        self.language_confidence_threshold = language_confidence_threshold
         
         self.raw_dir = os.path.join(output_dir, "raw_html")
         self.processed_dir = os.path.join(output_dir, "processed")
         self.metadata_dir = os.path.join(output_dir, "metadata")
         self.common_dir = os.path.join(output_dir, "site_common")
+        self.dedup_index_path = os.path.join(output_dir, ".html_dedup_index.json")
+        self._seen_raw_hashes: set[str] = set()
+        self._seen_processed_hashes: set[str] = set()
         
         # Track which domains we've already saved common content for
         self._saved_common_domains: set = set()
@@ -627,6 +639,38 @@ class HtmlContentSaver:
             os.makedirs(self.processed_dir, exist_ok=True)
             os.makedirs(self.metadata_dir, exist_ok=True)
             os.makedirs(self.common_dir, exist_ok=True)
+        self._load_dedup_index()
+
+    def _load_dedup_index(self):
+        import json
+
+        if not os.path.exists(self.dedup_index_path):
+            return
+        try:
+            with open(self.dedup_index_path, "r", encoding="utf-8") as f:
+                data = json.load(f) or {}
+            self._seen_raw_hashes = set(data.get("raw_html_hashes", []))
+            self._seen_processed_hashes = set(data.get("processed_text_hashes", []))
+        except Exception:
+            self._seen_raw_hashes = set()
+            self._seen_processed_hashes = set()
+
+    def _save_dedup_index(self):
+        import json
+
+        try:
+            with open(self.dedup_index_path, "w", encoding="utf-8") as f:
+                json.dump(
+                    {
+                        "raw_html_hashes": sorted(self._seen_raw_hashes),
+                        "processed_text_hashes": sorted(self._seen_processed_hashes),
+                    },
+                    f,
+                    ensure_ascii=False,
+                    indent=2,
+                )
+        except Exception:
+            pass
     
     def save(self, url: str, html: str, logger=None) -> Optional[ProcessedContent]:
         """
@@ -637,6 +681,11 @@ class HtmlContentSaver:
         parsed = urlparse(url)
         domain = parsed.netloc
         domain_prefix = domain.replace(".", "_").replace(":", "_")
+        raw_hash = hashlib.sha256((html or "").encode("utf-8", errors="ignore")).hexdigest()
+        if raw_hash in self._seen_raw_hashes:
+            if logger:
+                logger.info(f"Skip duplicate HTML (raw hash): {url}")
+            return None
         
         # Save common site elements (header/footer/sidebar) once per domain
         if domain not in self._saved_common_domains and self.save_processed:
@@ -668,18 +717,43 @@ class HtmlContentSaver:
             )
             
             if processed and processed.clean_text:
+                processed_hash = hashlib.sha256(
+                    processed.clean_text.encode("utf-8", errors="ignore")
+                ).hexdigest()
+                if processed_hash in self._seen_processed_hashes:
+                    if logger:
+                        logger.info(f"Skip duplicate HTML (processed text hash): {url}")
+                    return None
+
+                # Detect language from extracted text
+                from app.utils.language_detector import detect_language, prefix_filename_with_lang
+                if self.detect_language:
+                    lang = detect_language(
+                        processed.clean_text,
+                        provider=self.language_provider,
+                        model=self.language_model,
+                        min_confidence=self.language_confidence_threshold,
+                    )
+                else:
+                    lang = "und"
+                processed.language = lang
+                
                 ext = "md" if self.output_format == "markdown" else "txt"
-                processed_filename = f"{domain_prefix}_{url_to_filename(url, ext)}"
+                base_filename = f"{domain_prefix}_{url_to_filename(url, ext)}"
+                processed_filename = prefix_filename_with_lang(lang, base_filename)
                 processed_path = os.path.join(self.processed_dir, processed_filename)
                 
                 try:
                     with open(processed_path, "w", encoding="utf-8") as f:
                         f.write(processed.clean_text)
                     if logger:
-                        logger.debug(f"Saved processed content: {processed_path}")
+                        logger.debug(f"Saved processed content ({lang}): {processed_path}")
                     
                     # Save metadata as JSON (includes reference to common content)
                     self._save_metadata(url, processed, domain_prefix, logger)
+                    self._seen_raw_hashes.add(raw_hash)
+                    self._seen_processed_hashes.add(processed_hash)
+                    self._save_dedup_index()
                     
                     return processed
                 except OSError as e:
@@ -764,6 +838,7 @@ class HtmlContentSaver:
             "description": content.description,
             "author": content.author,
             "date": content.date,
+            "language": content.language,
             "content_length": len(content.clean_text),
             # Reference to common site content
             "site_common": {

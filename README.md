@@ -90,20 +90,43 @@ This will:
 - Content loaded via AJAX/fetch
 - Lazy-loaded images and text
 
-Combine all options:
+### With Document Processing (Docling)
+
+Process downloaded documents into clean **Markdown** (ideal for LLMs/RAG):
 ```powershell
-python scripts/run_orchestrator.py https://example.com --save-html --use-playwright --download
+python scripts/run_orchestrator.py --process-docs
+```
+
+This will:
+- Convert PDFs, DOCX, etc., from the `downloads/` directory.
+- Save the result as highly-structured **Markdown** in `downloads/processed/markdown/`.
+- Automatically **detect the language** of the content.
+
+### Automatic Language Detection
+
+Both HTML and document pipelines now automatically detect the language of the content and prefix files accordingly:
+- **Format**: `{lang}_{original_filename}.md`
+- **Example**: `en_about_us.md` or `mk_referenca.md`
+- Detected language is also saved in the metadata JSON for HTML pages.
+
+### Full Pipeline Command (The "Go" Command)
+
+To crawl, render JS, save processed Markdown, download documents, and process them with Docling all in one go:
+```powershell
+python scripts/run_orchestrator.py https://pdfobject.com --save-html --use-playwright --download --process-docs
 ```
 
 ## Configuration
 
-- **Test URL**: Edit `app/config/files/test.yaml` to change the default target URL
-- **URL Discovery**: Edit `app/config/files/url_discovery.yaml` for crawling settings
-- **Document Sweeping**: Edit `app/config/files/document_sweeping.yaml` for download settings
-- **HTML Saving**: Edit `app/config/files/html_saving.yaml` for HTML content extraction settings
+- **Test URL**: Edit `app/config/files/test.yaml` to change the default target URL.
+- **HTML Saving**: Edit `app/config/files/html_saving.yaml`. Set `output_format: "markdown"` for MD output.
+- **Document Sweeping**: Edit `app/config/files/document_sweeping.yaml`.
+- **Language Detection**: Toggle `detect_language: true/false` in the respective config files.
 
-## Output
+## Output Structure
 
-- Discovered URLs are logged to the console
-- Downloaded documents are saved to the `downloads/` directory (configurable in `document_sweeping.yaml`)
-- HTML content is saved to `html_output/` directory with subdirectories for raw HTML, processed text, and metadata
+- **Downloads**: `downloads/` (Originals) & `downloads/processed/markdown/` (Processed)
+- **HTML Output**: 
+  - `html_output/raw_html/` (Original source)
+  - `html_output/processed/` (Cleaned **Markdown/Text**)
+  - `html_output/metadata/` (JSON metadata with detected language)

@@ -1,4 +1,6 @@
 import asyncio
+import hashlib
+import os
 from typing import Iterable, List, Optional, Set
 from urllib.parse import urlparse
 
@@ -40,6 +42,28 @@ class DocumentDownloader:
         self.logger = setup_logger(__name__)
         self._global_seen_docs: Set[str] = set()
         self._global_seen_hashes: Set[str] = set()
+        self._seen_lock = asyncio.Lock()
+        self._bootstrap_existing_hashes()
+
+    def _bootstrap_existing_hashes(self) -> None:
+        """
+        Preload hashes from already downloaded files so future runs
+        skip exact duplicates that are already on disk.
+        """
+        if not os.path.isdir(self.output_dir):
+            return
+        for name in os.listdir(self.output_dir):
+            path = os.path.join(self.output_dir, name)
+            if not os.path.isfile(path):
+                continue
+            try:
+                sha = hashlib.sha256()
+                with open(path, "rb") as f:
+                    for chunk in iter(lambda: f.read(8192), b""):
+                        sha.update(chunk)
+                self._global_seen_hashes.add(sha.hexdigest())
+            except Exception:
+                continue
 
     async def sweep(self, urls: Iterable[str]) -> List[str]:
         url_list = list(urls)
@@ -113,6 +137,7 @@ class DocumentDownloader:
                     self.output_dir,
                     self.allowed_extensions,
                     self.logger,
+                    seen_hashes=self._global_seen_hashes,
                 )
                 if js_downloaded:
                     self.logger.info(f"Downloaded {len(js_downloaded)} files via JS buttons from {url}")
@@ -141,15 +166,16 @@ class DocumentDownloader:
         )
 
         downloaded: List[str] = list(js_downloaded)  # Start with JS-downloaded files
-        seen: Set[str] = set()
 
         for doc_url in doc_candidates:
             norm_url = normalize_doc_url(doc_url)
 
-            if norm_url in seen or norm_url in self._global_seen_docs:
-                self.logger.debug(f"Skip duplicate (already seen): {norm_url}")
-                continue
-            seen.add(norm_url)
+            # Eagerly reserve the URL under lock to prevent concurrent duplicates
+            async with self._seen_lock:
+                if norm_url in self._global_seen_docs:
+                    self.logger.debug(f"Skip duplicate (already seen): {norm_url}")
+                    continue
+                self._global_seen_docs.add(norm_url)
 
             if self.same_origin_only and start_netloc and urlparse(norm_url).netloc != start_netloc:
                 self.logger.debug(f"Skip candidate (cross-origin): {norm_url}")
@@ -168,7 +194,6 @@ class DocumentDownloader:
                 self.logger,
             )
             if path:
-                self._global_seen_docs.add(norm_url)
                 downloaded.append(path)
                 self.logger.info(f"Downloaded: {norm_url} -> {path}")
 

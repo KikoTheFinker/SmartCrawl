@@ -17,6 +17,7 @@ class ParsingPatterns:
     prefer_https: bool
     strip_www: bool
     pagination_hints: Set[str]
+    tracking_params: Set[str]
     max_pagination_page: int
 
 
@@ -35,6 +36,7 @@ def load_patterns() -> ParsingPatterns:
     language_segment = re.compile(cfg.language_segment_pattern, re.I)
 
     pagination_hints = {p.lower() for p in cfg.pagination_hints}
+    tracking_params = {p.lower() for p in cfg.tracking_params}
 
     return ParsingPatterns(
         html_ct=html_ct,
@@ -47,6 +49,7 @@ def load_patterns() -> ParsingPatterns:
         prefer_https=cfg.prefer_https,
         strip_www=cfg.strip_www,
         pagination_hints=pagination_hints,
+        tracking_params=tracking_params,
         max_pagination_page=cfg.max_pagination_page,
     )
 

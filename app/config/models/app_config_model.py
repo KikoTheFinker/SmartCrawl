@@ -19,6 +19,7 @@ class HttpCrawlerConfig(BaseModel):
     include_assets: bool
     html_only: bool
     max_pages: int
+    max_depth: int = 15
     concurrency: int
     obey_robots: bool
     verbose: bool
@@ -65,6 +66,10 @@ class DocumentSweepingConfig(BaseModel):
     doc_mime_types: List[str]
     max_document_bytes: int
     click_download_buttons: bool = True  # Click JS download buttons (WordPress Download Manager, etc.)
+    detect_language: bool = True  # Detect language on docling-processed documents
+    language_provider: str = "fasttext"  # "fasttext" (free/local) or "openai" (paid/API)
+    language_model: str = "full"  # fasttext: "lite"/"full"; openai: e.g. "gpt-4o-mini"
+    language_confidence_threshold: float = 0.60  # only for fasttext; below => "und"
 
 
 class HtmlSavingConfig(BaseModel):
@@ -85,6 +90,12 @@ class HtmlSavingConfig(BaseModel):
     scroll_page: bool = True  # Scroll page to trigger lazy loading
     wait_for_idle: bool = True  # Wait for network idle before capturing
     playwright_concurrency: int = 4  # Max parallel browser pages (lower than httpx)
+    
+    # Language detection options
+    detect_language: bool = True  # Detect language on processed HTML content
+    language_provider: str = "fasttext"  # "fasttext" (free/local) or "openai" (paid/API)
+    language_model: str = "full"  # fasttext: "lite"/"full"; openai: e.g. "gpt-4o-mini"
+    language_confidence_threshold: float = 0.60  # only for fasttext; below => "und"
 
 
 class AppConfig(BaseModel):

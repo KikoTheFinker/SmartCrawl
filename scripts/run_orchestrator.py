@@ -1,7 +1,12 @@
 #!/usr/bin/env python3
 import argparse
 import asyncio
+import sys
+import os
 from pathlib import Path
+
+# Add project root to sys.path to allow imports from 'app'
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from app.config.loaders.document_sweeping_config_loader import get_document_sweeping_config
 from app.config.loaders.env_loader import env_settings
@@ -10,7 +15,6 @@ from app.config.loaders.html_saving_config_loader import get_html_saving_config
 from app.config.models.app_config_model import AppConfig
 from app.crawlers.document_downloader.core.document_downloader import DocumentDownloader
 from app.crawlers.url_discovery.orchestrator import UrlDiscoveryOrchestrator
-from app.docling.docling_processor import DoclingProcessor
 from app.logging.logger import setup_logger
 
 
@@ -80,8 +84,10 @@ def main():
             logger.debug(f"URL: {u}")
 
         downloaded = []
-        if args.download:
+        if args.download or args.process_docs:
             sweep_cfg = get_document_sweeping_config()
+
+        if args.download:
             downloader = DocumentDownloader(
                 output_dir=sweep_cfg.output_dir,
                 allowed_mime_types=set([s.strip().lower() for s in sweep_cfg.doc_mime_types]),
@@ -98,40 +104,45 @@ def main():
             for p in downloaded:
                 logger.debug(f"FILE: {p}")
 
-            # Step 3: Document Processing with Docling (if requested)
-            if args.process_docs:
-                logger.info("=" * 60)
-                logger.info("Step 3: Document Processing with Docling")
-                logger.info("=" * 60)
+        # Step 3: Document Processing with Docling (if requested)
+        if args.process_docs:
+            logger.info("=" * 60)
+            logger.info("Step 3: Document Processing with Docling")
+            logger.info("=" * 60)
+            
+            input_dir = sweep_cfg.output_dir
+            input_path = Path(input_dir)
+            
+            existing_docs = [f for f in input_path.glob("*.*") if f.is_file() and f.parent.name != "processed"] if input_path.exists() else []
+            
+            if not existing_docs:
+                logger.warning(f"No documents found in {input_dir}. Skipping docling processing.")
+            else:
+                # Create output directory for processed documents
+                output_dir = input_path / "processed" / args.docling_format
+                output_dir.mkdir(parents=True, exist_ok=True)
                 
-                if not downloaded:
-                    logger.warning("No documents were downloaded. Skipping docling processing.")
-                else:
-                    input_dir = sweep_cfg.output_dir
-                    
-                    # Create output directory for processed documents
-                    output_dir = Path(input_dir) / "processed" / args.docling_format
-                    output_dir.mkdir(parents=True, exist_ok=True)
-                    
-                    # Enable OCR by default when processing documents, unless explicitly disabled
-                    # User can explicitly enable with --enable-ocr or disable with --disable-ocr
-                    enable_ocr = (args.enable_ocr or not args.disable_ocr) if args.process_docs else args.enable_ocr
-                    
-                    processor = DoclingProcessor(
-                        input_dir=input_dir,
-                        output_dir=str(output_dir),
-                        export_format=args.docling_format,
-                        concurrency=2,
-                        enable_ocr=enable_ocr,
-                        ocr_languages=args.ocr_languages
-                    )
-                    
-                    processed_files = await processor.process_all()
-                    logger.info(f"Processed {len(processed_files)} documents to {output_dir}")
-        elif args.process_docs:
-            logger.error("--process-docs requires --download to be set first")
-            import sys
-            sys.exit(1)
+                # Enable OCR by default when processing documents, unless explicitly disabled
+                enable_ocr = (args.enable_ocr or not args.disable_ocr)
+                
+                # Import DoclingProcessor here to avoid heavy imports on startup when not processing docs
+                from app.docling.docling_processor import DoclingProcessor
+                
+                processor = DoclingProcessor(
+                    input_dir=str(input_path),
+                    output_dir=str(output_dir),
+                    export_format=args.docling_format,
+                    concurrency=2,
+                    enable_ocr=enable_ocr,
+                    ocr_languages=args.ocr_languages,
+                    detect_language=sweep_cfg.detect_language,
+                    language_provider=sweep_cfg.language_provider,
+                    language_model=sweep_cfg.language_model,
+                    language_confidence_threshold=sweep_cfg.language_confidence_threshold,
+                )
+                
+                processed_files = await processor.process_all()
+                logger.info(f"Processed {len(processed_files)} documents to {output_dir}")
 
     asyncio.run(run())
 

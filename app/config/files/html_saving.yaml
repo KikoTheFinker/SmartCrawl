@@ -3,7 +3,7 @@ html_saving:
   output_dir: "html_output"
   save_raw: true           # Save original HTML files
   save_processed: true     # Save processed clean text
-  output_format: "txt"     # Output format: txt or markdown
+  output_format: "markdown"     # Output format: txt or markdown
   include_tables: true     # Include table content in processed output
   include_links: false     # Include hyperlinks in processed output
   min_content_length: 100  # Minimum content length to save
@@ -19,3 +19,9 @@ html_saving:
   scroll_page: true        # Scroll page to trigger lazy loading
   wait_for_idle: true      # Wait for network idle before capturing
   playwright_concurrency: 4  # Max parallel browser pages (keep low, browsers are heavy)
+  
+  # Language detection for processed HTML content
+  detect_language: true
+  language_provider: "fasttext"
+  language_model: "full"
+  language_confidence_threshold: 0.60

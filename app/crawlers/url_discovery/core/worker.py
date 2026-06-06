@@ -1,5 +1,7 @@
 import asyncio
+from collections import Counter
 from typing import Optional, Set
+from urllib.parse import urlparse
 
 import httpx
 
@@ -9,6 +11,27 @@ from app.crawlers.url_discovery.utils.html_parsing import extract_links, is_prob
 from app.crawlers.url_discovery.utils.normalize import same_domain
 from app.crawlers.url_discovery.utils.playwright_fetcher import PlaywrightHtmlFetcher
 from app.utils.robots_cache import robots_cache
+
+
+def _has_path_loop(url: str, min_window: int = 2, max_window: int = 4) -> bool:
+    """Detect repeating segment patterns in a URL path.
+
+    Returns True when the same sequence of consecutive path segments appears
+    more than once, which is a strong signal of recursive navigation menus
+    (e.g. ``/pocetna/za-kam/media-centar/pocetna/za-kam/media-centar/...``).
+    """
+    segments = [s for s in urlparse(url).path.split("/") if s]
+    if len(segments) < min_window * 2:
+        return False
+
+    for window in range(min_window, min(max_window + 1, len(segments) // 2 + 1)):
+        counts: Counter[tuple] = Counter()
+        for i in range(len(segments) - window + 1):
+            key = tuple(segments[i:i + window])
+            counts[key] += 1
+            if counts[key] >= 2:
+                return True
+    return False
 
 
 class CrawlerWorker:
@@ -48,10 +71,12 @@ class CrawlerWorker:
         return allowed
 
     async def run(self):
+        max_depth = getattr(self.cfg, "max_depth", 15)
+
         while len(self.seen) < self.cfg.max_pages:
             try:
                 try:
-                    _, url = await asyncio.wait_for(self.q.get(), timeout=10.0)
+                    _, depth, url = await asyncio.wait_for(self.q.get(), timeout=10.0)
                 except asyncio.TimeoutError:
                     if self.q.empty():
                         self.logger.info("Worker exiting: queue empty for 10s")
@@ -63,6 +88,14 @@ class CrawlerWorker:
                 # Check if URL should be processed
                 if url in self.seen:
                     self.logger.debug(f"Skipping (already seen): {url}")
+                    continue
+
+                if depth > max_depth:
+                    self.logger.debug(f"Skipping (depth {depth} > max {max_depth}): {url}")
+                    continue
+
+                if _has_path_loop(url):
+                    self.logger.debug(f"Skipping (path loop detected): {url}")
                     continue
                 
                 allowed = await self._allowed(url)
@@ -101,12 +134,14 @@ class CrawlerWorker:
                                           patterns=self.patterns)
                     self.logger.info(f"Found {len(links)} links on {url}")
 
-                    await self._process_links(links)
+                    await self._process_links(links, depth + 1)
             except Exception as e:
                 self.logger.warning(f"Worker error: {e}")
 
-    async def _process_links(self, links):
-        new_links, rejected_domain, rejected_html, already_seen = 0, 0, 0, 0
+    async def _process_links(self, links, child_depth: int):
+        max_depth = getattr(self.cfg, "max_depth", 15)
+        new_links, rejected_domain, rejected_html, already_seen, rejected_depth, rejected_loop = 0, 0, 0, 0, 0, 0
+
         for link in links:
             if not link or len(link) > self.patterns.max_url_length:
                 continue
@@ -119,8 +154,13 @@ class CrawlerWorker:
                 self.found.add(link)
 
             if (link not in self.seen) and is_probably_html_url(link, self.patterns):
-                await self.q.put((10, link))
-                new_links += 1
+                if child_depth > max_depth:
+                    rejected_depth += 1
+                elif _has_path_loop(link):
+                    rejected_loop += 1
+                else:
+                    await self.q.put((10, child_depth, link))
+                    new_links += 1
             else:
                 if link in self.seen:
                     already_seen += 1
@@ -130,4 +170,6 @@ class CrawlerWorker:
         self.logger.info(
             f"Link processing: {new_links} added, {rejected_domain} rejected (domain), "
             f"{rejected_html} rejected (html), {already_seen} already seen"
+            + (f", {rejected_depth} rejected (depth)" if rejected_depth else "")
+            + (f", {rejected_loop} rejected (loop)" if rejected_loop else "")
         )

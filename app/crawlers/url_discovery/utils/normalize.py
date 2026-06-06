@@ -1,4 +1,4 @@
-from typing import Tuple
+from typing import Tuple, Union, Optional
 
 from app.crawlers.url_discovery.utils.patterns import ParsingPatterns
 
@@ -20,9 +20,9 @@ from urllib.parse import urljoin, urldefrag, urlparse, urlunparse, parse_qsl, ur
 
 def normalize_link(
         base_url: str,
-        href: str | bytes | None,
+        href: Union[str, bytes, None],
         patterns: ParsingPatterns
-) -> str | None:
+) -> Optional[str]:
     if not href:
         return None
     if isinstance(href, (bytes, bytearray)):
@@ -61,7 +61,7 @@ def normalize_link(
     q_pairs: list[tuple[str, str]] = []
     for k, v in parse_qsl(p.query, keep_blank_values=True):
         kl = k.lower()
-        if kl in patterns.asset_extensions or kl in patterns.pagination_hints:
+        if kl in patterns.asset_extensions or kl in patterns.pagination_hints or kl in patterns.tracking_params:
             continue
         q_pairs.append((k, v))
 

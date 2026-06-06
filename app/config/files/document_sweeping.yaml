@@ -21,5 +21,11 @@ document_sweeping:
   # When enabled, Playwright will click on download buttons to capture files
   # from sites using WordPress Download Manager, Easy Digital Downloads, etc.
   click_download_buttons: true
+  
+  # Language detection for docling-processed documents
+  detect_language: true
+  language_provider: "fasttext"
+  language_model: "full"
+  language_confidence_threshold: 0.60
 
 

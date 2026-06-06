@@ -38,6 +38,10 @@ class UrlDiscoveryOrchestrator:
                 include_tables=html_saving_config.include_tables,
                 include_links=html_saving_config.include_links,
                 extraction_mode=html_saving_config.extraction_mode,
+                detect_language=html_saving_config.detect_language,
+                language_provider=html_saving_config.language_provider,
+                language_model=html_saving_config.language_model,
+                language_confidence_threshold=html_saving_config.language_confidence_threshold,
             )
             self.logger.info(f"HTML saving enabled: output_dir={html_saving_config.output_dir}, mode={html_saving_config.extraction_mode}")
             

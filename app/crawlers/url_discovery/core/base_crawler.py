@@ -24,7 +24,8 @@ class BaseCrawler:
 
         self.seen: Set[str] = set()
         self.found: Set[str] = set()
-        self.q: asyncio.PriorityQueue[Tuple[int, str]] = asyncio.PriorityQueue()
+        # Queue items: (priority, depth, url)
+        self.q: asyncio.PriorityQueue[Tuple[int, int, str]] = asyncio.PriorityQueue()
         self.sem = asyncio.Semaphore(max(1, self.cfg.concurrency))
 
         self.worker = CrawlerWorker(
@@ -51,7 +52,7 @@ class BaseCrawler:
 
     async def run(self) -> List[str]:
         self.logger.info("Starting crawl")
-        await self.q.put((0, self.start_url))
+        await self.q.put((0, 0, self.start_url))  # priority=0, depth=0
         workers = [asyncio.create_task(self.worker.run()) for _ in range(self.cfg.concurrency)]
         try:
             await self.q.join()
